@@ -6,7 +6,7 @@ from PIL import Image
 
 # Import the router, assuming simple_reader is a local package
 try:
-    from simple_reader.routes import router
+    from routes import router
 except ImportError:
     print("Warning: The 'simple_reader' package or 'routes' module was not found.")
     print("Please ensure your project structure is correct.")

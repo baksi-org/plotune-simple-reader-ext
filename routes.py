@@ -4,7 +4,7 @@ from typing import Optional, Dict, Literal, List
 from datetime import datetime
 import uuid
 import os
-from core import reader_manager, Reader
+from .core import reader_manager, Reader
 import asyncio
 
 router = APIRouter()

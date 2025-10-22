@@ -4,15 +4,7 @@ from fastapi import FastAPI
 from pystray import Icon as pystray_icon, MenuItem as pystray_menu_item
 from PIL import Image
 
-# Import the router, assuming simple_reader is a local package
-try:
-    from routes import router
-except ImportError:
-    print("Warning: The 'simple_reader' package or 'routes' module was not found.")
-    print("Please ensure your project structure is correct.")
-    # Fallback to a simple router if the original is not found
-    from fastapi import APIRouter
-    router = APIRouter()
+from .routes import router
 
 BASE_PATH = os.path.dirname(__file__)
 __DEBUG__ = False
@@ -82,10 +74,10 @@ def create_app(config: dict) -> FastAPI:
     app.include_router(router)
     return app
 
-def run_server(ip: str, port: int):
+def run_server(ip: str, port: int, app: FastAPI):
     """Starts the FastAPI server using Uvicorn."""
     uvicorn.run(
-        "simple_reader.__main__:app",
+        app,
         host=ip,
         port=port,
         log_level="info",
@@ -107,7 +99,7 @@ def main():
 
     # Start the FastAPI server in a separate thread.
     # This allows the main thread to handle the system tray icon.
-    server_thread = threading.Thread(target=run_server, args=(ip, port), daemon=True)
+    server_thread = threading.Thread(target=run_server, args=(ip, port, app), daemon=True)
     server_thread.start()
     heartbeat_thread = threading.Thread(
         target=start_heartbeat_thread, 

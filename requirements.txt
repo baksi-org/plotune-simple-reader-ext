@@ -1,0 +1,6 @@
+fastapi==0.120.0
+pandas==2.3.3
+pip-chill==1.0.3
+pystray==0.19.5
+uvicorn==0.38.0
+zstandard==0.25.0

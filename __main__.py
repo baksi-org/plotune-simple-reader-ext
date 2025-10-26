@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from pystray import Icon as pystray_icon, MenuItem as pystray_menu_item
 from PIL import Image
 
-from .routes import router
+from core.routes import router
 
 BASE_PATH = os.path.dirname(__file__)
 __DEBUG__ = False

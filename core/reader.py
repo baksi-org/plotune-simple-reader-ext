@@ -4,14 +4,6 @@ import json
 from functools import lru_cache
 from typing import Dict, List, Tuple, Iterable, Optional
 import os
-
-
-from . import PltReader
-import pandas as pd
-import json
-from functools import lru_cache
-from typing import Dict, List, Tuple, Iterable, Optional
-import os
 import warnings
 
 class Reader:

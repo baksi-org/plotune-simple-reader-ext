@@ -1,0 +1,1 @@
+pyinstaller --onefile --noconsole --name simple_reader --icon=icon.png --add-data "core;core" --hidden-import uvicorn.lifespan.off --collect-all pandas --collect-all pydantic __main__.py

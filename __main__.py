@@ -1,20 +1,47 @@
+import sys
 import threading
-import uvicorn, os, json
+import uvicorn
+import os
+import json
+import logging
+import socket
+import time
+
 from fastapi import FastAPI
 from pystray import Icon as pystray_icon, MenuItem as pystray_menu_item
 from PIL import Image
+import requests
+import asyncio
 
 from core.routes import router
 
-BASE_PATH = os.path.dirname(__file__)
+# BASE_PATH: PyInstaller tek-dosya (frozen) durumuna göre
+if getattr(sys, 'frozen', False):
+    BASE_PATH = os.path.dirname(sys.executable)
+else:
+    BASE_PATH = os.path.dirname(__file__)
+
 __DEBUG__ = False
 
-### HEARTBEAT
-import asyncio
-import requests
-import time
-import sys
+# --- Logging: stdout/stderr yoksa dosyaya yazalım (noconsole için) ---
+LOG_PATH = os.path.join(BASE_PATH, "extension_log.txt")
+# Basit logging konfigürasyonu
+stream = sys.stdout if sys.stdout is not None else open(LOG_PATH, "a", encoding="utf-8")
+logging.basicConfig(
+    level=logging.WARNING if not __DEBUG__ else logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.FileHandler(LOG_PATH, encoding="utf-8"), logging.StreamHandler(stream)]
+)
+logger = logging.getLogger(__name__)
 
+# Ayrıca stdout/stderr'i de dosyaya yönlendir (PyInstaller --noconsole için)
+try:
+    sys.stdout = open(LOG_PATH, "a", encoding="utf-8")
+    sys.stderr = sys.stdout
+except Exception:
+    pass
+
+# --- HEARTBEAT ---
 def send_heartbeat(ext_id, heartbeat_url):
     payload = {
         "id": ext_id,
@@ -23,16 +50,16 @@ def send_heartbeat(ext_id, heartbeat_url):
     try:
         r = requests.post(heartbeat_url, json=payload, timeout=2)
         if r.status_code == 200:
-            print("Heartbeat sent:", r.status_code)
+            logger.info(f"Heartbeat sent: {r.status_code}")
             return True
         else:
-            print("Heartbeat failed:", r.status_code)
+            logger.warning(f"Heartbeat failed: {r.status_code}")
             return False
     except Exception as e:
-        print("Heartbeat failed:", e)
+        logger.exception("Heartbeat failed:")
         return False
 
-async def heartbeat_loop(ext_id, heartbeat_url, interval=15, max_failures=5):
+async def heartbeat_loop(ext_id, heartbeat_url, interval=5, max_failures=2):
     fail_count = 0
     while True:
         success = send_heartbeat(ext_id, heartbeat_url)
@@ -40,10 +67,17 @@ async def heartbeat_loop(ext_id, heartbeat_url, interval=15, max_failures=5):
             fail_count = 0
         else:
             fail_count += 1
-            print(f"Failed heartbeats: {fail_count}/{max_failures}")
+            logger.warning(f"Failed heartbeats: {fail_count}/{max_failures}")
             if fail_count >= max_failures:
-                print("Max failures reached, shutting down extension...")
-                sys.exit(1)
+                logger.error("Max failures reached, shutting down extension...")
+                try:
+                    from __main__ import icon  # veya global icon
+                    if icon:
+                        icon.stop()
+                except Exception:
+                    pass
+
+                os._exit(1)
         await asyncio.sleep(interval)
 
 def start_heartbeat_thread(ext_id, heartbeat_url):
@@ -51,81 +85,105 @@ def start_heartbeat_thread(ext_id, heartbeat_url):
     asyncio.set_event_loop(loop)
     loop.run_until_complete(heartbeat_loop(ext_id, heartbeat_url))
 
-
-
+# --- CONFIG LOAD ---
 def load_config():
-    """Loads the application configuration from plugin.json."""
     plugin_path = os.path.join(BASE_PATH, "plugin.json")
     try:
-        with open(plugin_path) as f:
+        with open(plugin_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
-        print(f"Error: plugin.json not found at {plugin_path}")
+        logger.exception(f"plugin.json not found at {plugin_path}")
         return {"connection": {"ip": "127.0.0.1", "port": 8100}}
     except json.JSONDecodeError:
-        print(f"Error: Invalid JSON in {plugin_path}")
+        logger.exception(f"Invalid JSON in {plugin_path}")
         return {"connection": {"ip": "127.0.0.1", "port": 8100}}
 
+# --- FASTAPI UYGULAMA ---
 def create_app(config: dict) -> FastAPI:
-    """Creates and configures the FastAPI application."""
     app = FastAPI(title="Sample Data Stream",
                   description="Example Live Data Stream on Web-Socket Configuration",
                   version="1.0.0")
     app.include_router(router)
     return app
 
-def run_server(ip: str, port: int, app: FastAPI):
-    """Starts the FastAPI server using Uvicorn."""
-    uvicorn.run(
-        app,
-        host=ip,
-        port=port,
-        log_level="info",
-        access_log=False,
-        reload=__DEBUG__,
-    )
+# --- UVICORN SERVER (daha güvenli: Config/Server) ---
+from uvicorn import Config as UvicornConfig, Server as UvicornServer
 
+def run_server(ip: str, port: int, app: FastAPI):
+    try:
+        logger.info(f"Starting uvicorn on {ip}:{port}")
+        config = UvicornConfig(app=app, host=ip, port=port, log_level="info", access_log=True)
+        server = UvicornServer(config)
+        # blocking run: çalıştırıldığı thread'de sürekli çalışacak
+        server.run()
+    except Exception:
+        logger.exception("Uvicorn server failed:")
+
+# --- Helper: server ayağa kalkana kadar bekle ---
+def wait_for_port(host: str, port: int, timeout: float = 5.0, poll_interval: float = 0.1):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                return True
+        except OSError:
+            time.sleep(poll_interval)
+    return False
+
+# --- MAIN ---
 def main():
-    """Main function to start both the server and the system tray icon."""
+    logger.info("Extension starting...")
     config = load_config()
-    conn = config["connection"]
+    conn = config.get("connection", {})
     ip = conn.get("ip", "127.0.0.1")
     port = conn.get("port", 8100)
-    url = "http://127.0.0.1:8000/register"
-    response = requests.post(url, json=config)
-    
-    # Get the name from the config, defaulting to 'Unnamed Extension'
-    plugin_name = config.get("name", "Unnamed Extension")
 
-    # Start the FastAPI server in a separate thread.
-    # This allows the main thread to handle the system tray icon.
-    server_thread = threading.Thread(target=run_server, args=(ip, port, app), daemon=True)
+    # register (remote server)
+    try:
+        url = "http://127.0.0.1:8000/register"
+        r = requests.post(url, json=config, timeout=3)
+        logger.info(f"Register response: {r.status_code} {r.text[:200]}")
+    except Exception:
+        logger.exception("Register request failed")
+
+    plugin_name = config.get("name", "Unnamed Extension")
+    app = create_app(config)
+
+    # Start server thread (daemon=False => ana process kapanana kadar açık kalır)
+    server_thread = threading.Thread(target=run_server, args=(ip, port, app), daemon=False)
     server_thread.start()
+
+    # wait until server port is listening before moving on (important)
+    started = wait_for_port(ip, port, timeout=8.0)
+    if not started:
+        logger.error(f"Server did not start and listen on {ip}:{port} within timeout. Check logs/firewall.")
+    else:
+        logger.info(f"Server is up on {ip}:{port}")
+
+    # Heartbeat thread (daemon ok)
     heartbeat_thread = threading.Thread(
-        target=start_heartbeat_thread, 
+        target=start_heartbeat_thread,
         args=(config.get("id"), "http://127.0.0.1:8000/heartbeat"),
         daemon=True
     )
     heartbeat_thread.start()
 
-    # Check if a custom icon file exists, otherwise use a default image.
-    icon_path = os.path.join(BASE_PATH, "icon.png") # Assuming a file named icon.png
+    # icon
+    icon_path = os.path.join(BASE_PATH, "icon.png")
     if os.path.exists(icon_path):
         image = Image.open(icon_path)
     else:
-        # Create a simple default icon if none is found.
         image = Image.new('RGB', (64, 64), 'white')
-    
-    # Define the menu for the system tray icon.
-    menu = (
-        pystray_menu_item('Force Stop Extension', lambda icon: icon.stop()),
-    )
-    
-    # Create and run the system tray icon, using the plugin name in the title.
-    icon = pystray_icon("FastAPI Application", image, f"{plugin_name} Extension", menu)
-    icon.run()
 
-# Main entry point for the application.
+    menu = (pystray_menu_item('Force Stop Extension', lambda icon: icon.stop()),)
+    icon = pystray_icon("FastAPI Application", image, f"{plugin_name} Extension", menu)
+
+    try:
+        icon.run()
+    except Exception:
+        logger.exception("pystray icon failed")
+
+# Global init when module import ediliyor
 config = load_config()
 app = create_app(config)
 

@@ -14,6 +14,7 @@
   "git_path": "https://github.com/plotune/simple-reader",
   "category": "Recorder",
   "post_url": "http://localhost:8000/api/extension_click",
+  "webpage": "https://plotune.net",
   "file_formats": [
     "csv", "pltx"
   ],
@@ -31,4 +32,5 @@
       "default": ""
     }
   }
+
 }

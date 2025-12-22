@@ -1,0 +1,31 @@
+{
+  "name": "Plotune Simple Reader",
+  "id": "simple_reader",
+    "version": "v1.0.0",
+  "description": "Reads table data from defined files.",
+  "mode":"offline",
+    "author": "Plotune SDK Team",
+  "cmd": [
+    "python",
+    "main.py"
+  ],
+  "enabled": true,
+  "last_updated": "2025-06-15",
+  "git_path": "https://github.com/baksi-org/plotune-simple-reader-ext",
+  "category": "Recorder",
+  "post_url": "http://localhost:8000/api/extension_click",
+  "webpage": "https://plotune.net",
+  "file_formats": [
+    "csv", "pltx"
+  ],
+  "ask_form": false,
+  "connection": {
+    "ip": "127.0.0.1",
+    "port": 8105,
+    "target": "127.0.0.1",
+    "target_port": 8000
+  },
+  "configuration": {
+  }
+
+}

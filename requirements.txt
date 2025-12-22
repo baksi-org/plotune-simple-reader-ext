@@ -1,14 +1,6 @@
-fastapi==0.120.0
+plotune-sdk~=0.1
 h5py==3.15.1
-httptools==0.7.1
 pandas==2.3.3
-pip-chill==1.0.3
-pyarrow==22.0.0
-pystray==0.19.5
-python-dotenv==1.2.1
-pyyaml==6.0.3
-requests==2.32.5
-uvicorn==0.38.0
-watchfiles==1.1.1
-websockets==15.0.1
 zstandard==0.25.0
+pyarrow==22.0.0
+lz4==4.4.5

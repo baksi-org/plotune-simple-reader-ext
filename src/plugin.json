@@ -1,6 +1,6 @@
 {
   "name": "Plotune Simple Reader",
-  "id": "simple_reader",
+  "id": "plotune_simple_reader_ext",
     "version": "v1.0.0",
   "description": "Reads table data from defined files.",
   "mode":"offline",

@@ -52,7 +52,7 @@ echo Building executable...
 pyinstaller --name %APP_NAME% ^
             --onefile ^
             --noconfirm ^
-            --icon assets/logo.ico ^
+            --icon assets\logo.ico ^
             src\main.py
 
 :: Copy plugin.json next to EXE

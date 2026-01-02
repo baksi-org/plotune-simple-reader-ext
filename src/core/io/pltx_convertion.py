@@ -25,7 +25,7 @@ except Exception:
 
 import zlib  # fallback
 
-MAGIC = b"PLTX"      # file magic
+MAGIC = b"PLTX"  # file magic
 CHUNK_MAGIC = b"CHNK"
 INDEX_MAGIC = b"IDXT"
 FOOTER_MAGIC = b"FTER"
@@ -33,7 +33,7 @@ FOOTER_MAGIC = b"FTER"
 # compression codes
 COMP_NONE = 0
 COMP_ZLIB = 1
-COMP_LZ4  = 2
+COMP_LZ4 = 2
 COMP_ZSTD = 3
 
 RECORD_FMT = "<dd"  # (timestamp: float64, value: float64)
@@ -44,14 +44,17 @@ RECORD_SIZE = struct.calcsize(RECORD_FMT)
 CHUNK_HDR_FMT = "<IIIIdd"
 CHUNK_HDR_SIZE = struct.calcsize(CHUNK_HDR_FMT)
 
-HEADER_PREFIX_FMT = "<4sBBdH"  # MAGIC, version(u8), comp(u8), created(f64), sig_count(u16)
+HEADER_PREFIX_FMT = (
+    "<4sBBdH"  # MAGIC, version(u8), comp(u8), created(f64), sig_count(u16)
+)
 HEADER_PREFIX_SIZE = struct.calcsize(HEADER_PREFIX_FMT)
 
-INDEX_ENTRY_FMT = "<IQdd"      # sid(u32), off(u64), min_ts(f64), max_ts(f64)
+INDEX_ENTRY_FMT = "<IQdd"  # sid(u32), off(u64), min_ts(f64), max_ts(f64)
 INDEX_ENTRY_SIZE = struct.calcsize(INDEX_ENTRY_FMT)
 
-FOOTER_FMT = "<4sQ"            # FOOTER_MAGIC, index_offset(u64)
+FOOTER_FMT = "<4sQ"  # FOOTER_MAGIC, index_offset(u64)
 FOOTER_SIZE = struct.calcsize(FOOTER_FMT)
+
 
 def _pick_compression(name: Optional[str]) -> int:
     name = (name or "zstd").lower()
@@ -63,6 +66,7 @@ def _pick_compression(name: Optional[str]) -> int:
         return COMP_LZ4
     return COMP_ZLIB
 
+
 def _compress(data: bytes, comp: int, level: int = 3) -> bytes:
     if comp == COMP_NONE:
         return data
@@ -72,6 +76,7 @@ def _compress(data: bytes, comp: int, level: int = 3) -> bytes:
     if comp == COMP_LZ4 and lz4f is not None:
         return lz4f.compress(data)
     return zlib.compress(data, level)
+
 
 def _decompress(data: bytes, comp: int) -> bytes:
     if comp == COMP_NONE:
@@ -83,7 +88,9 @@ def _decompress(data: bytes, comp: int) -> bytes:
         return lz4f.decompress(data)
     return zlib.decompress(data)
 
+
 # ----------------------- ASYNC WRITER -----------------------
+
 
 class AsyncPltWriter:
     """
@@ -95,6 +102,7 @@ class AsyncPltWriter:
     Data chunks are first appended to a temp chunk file (no header). On save, we write header to final,
     then stream-copy chunks while building a final index (offsets in the final file).
     """
+
     def __init__(
         self,
         final_path: str,
@@ -110,7 +118,9 @@ class AsyncPltWriter:
         tdir = temp_dir or os.path.dirname(final_path) or "."
         os.makedirs(tdir, exist_ok=True)
         self.tmp_path = os.path.join(tdir, f".{base}.pltx.tmpchunks")
-        self.meta_path = os.path.join(tdir, f".{base}.pltx.meta")  # optional (not used for now)
+        self.meta_path = os.path.join(
+            tdir, f".{base}.pltx.meta"
+        )  # optional (not used for now)
 
         self.comp = _pick_compression(compression)
         self.created = float(time.time())
@@ -138,7 +148,9 @@ class AsyncPltWriter:
 
     # ---- public API ----
 
-    def add_signal_meta(self, name: str, unit: str = "", description: str = "", source: str = "") -> int:
+    def add_signal_meta(
+        self, name: str, unit: str = "", description: str = "", source: str = ""
+    ) -> int:
         """Register/ensure a signal exists; returns signal_id."""
         if name in self._signals_by_name:
             return self._signals_by_name[name]
@@ -146,7 +158,10 @@ class AsyncPltWriter:
         self._next_sid += 1
         self._signals_by_name[name] = sid
         self._signals_by_id[sid] = {
-            "name": name, "unit": unit, "description": description, "source": source
+            "name": name,
+            "unit": unit,
+            "description": description,
+            "source": source,
         }
         self._buf_ts[sid] = []
         self._buf_val[sid] = []
@@ -209,7 +224,9 @@ class AsyncPltWriter:
         if len(self._buf_ts[sid]) >= self.chunk_records:
             await self._flush_signal(sid)
 
-    async def record_batch(self, signal_name_or_id, timestamps: Iterable[float], values: Iterable[float]):
+    async def record_batch(
+        self, signal_name_or_id, timestamps: Iterable[float], values: Iterable[float]
+    ):
         """Append many points."""
         sid = self.get_signal_id(signal_name_or_id)
         tsb = self._buf_ts[sid]
@@ -232,7 +249,11 @@ class AsyncPltWriter:
 
     async def _flush_all(self):
         # flush every non-empty buffer
-        tasks = [self._flush_signal(sid) for sid in list(self._buf_ts.keys()) if self._buf_ts[sid]]
+        tasks = [
+            self._flush_signal(sid)
+            for sid in list(self._buf_ts.keys())
+            if self._buf_ts[sid]
+        ]
         if tasks:
             await asyncio.gather(*tasks)
 
@@ -247,29 +268,37 @@ class AsyncPltWriter:
         self._buf_val[sid].clear()
         await self._append_chunk_to_tmp(sid, out_ts, out_vs)
 
-    async def _append_chunk_to_tmp(self, sid: int, ts_list: List[float], val_list: List[float]):
+    async def _append_chunk_to_tmp(
+        self, sid: int, ts_list: List[float], val_list: List[float]
+    ):
         if not ts_list:
             return
         # pack records
         rec_buf = io.BytesIO()
         n = 0
-        min_ts = float('inf')
-        max_ts = float('-inf')
+        min_ts = float("inf")
+        max_ts = float("-inf")
         for t, v in zip(ts_list, val_list):
             rec_buf.write(struct.pack(RECORD_FMT, float(t), float(v)))
-            if t < min_ts: min_ts = t
-            if t > max_ts: max_ts = t
+            if t < min_ts:
+                min_ts = t
+            if t > max_ts:
+                max_ts = t
             n += 1
         raw = rec_buf.getvalue()
         comp = _compress(raw, self.comp)
 
         hdr = io.BytesIO()
         hdr.write(CHUNK_MAGIC)
-        hdr.write(struct.pack(CHUNK_HDR_FMT,
-                              sid, n, len(raw), len(comp), float(min_ts), float(max_ts)))
+        hdr.write(
+            struct.pack(
+                CHUNK_HDR_FMT, sid, n, len(raw), len(comp), float(min_ts), float(max_ts)
+            )
+        )
 
         # write to tmp file under lock; use to_thread to avoid blocking loop
         async with self._tmp_lock:
+
             def _write():
                 self._tmp_f.write(hdr.getvalue())
                 self._tmp_f.write(comp)
@@ -277,6 +306,7 @@ class AsyncPltWriter:
                 if self.fsync_every and (self._chunks_written % self.fsync_every == 0):
                     self._tmp_f.flush()
                     os.fsync(self._tmp_f.fileno())
+
             await asyncio.to_thread(_write)
 
     # ---- temp scanning & final assembly ----
@@ -300,27 +330,45 @@ class AsyncPltWriter:
                 hdr_bytes = f.read(CHUNK_HDR_SIZE)
                 if len(hdr_bytes) != CHUNK_HDR_SIZE:
                     raise ValueError("Temp file corrupted: incomplete chunk header")
-                sid, n, raw_len, comp_len, mn, mx = struct.unpack(CHUNK_HDR_FMT, hdr_bytes)
+                sid, n, raw_len, comp_len, mn, mx = struct.unpack(
+                    CHUNK_HDR_FMT, hdr_bytes
+                )
                 # skip payload
                 f.seek(comp_len, os.SEEK_CUR)
                 total_size = 4 + CHUNK_HDR_SIZE + comp_len
                 entries.append((sid, total_size, mn, mx, comp_len))
         return entries
 
-    def _write_header_to_final(self, f, signals_sorted: List[Tuple[int, Dict[str, str]]]):
+    def _write_header_to_final(
+        self, f, signals_sorted: List[Tuple[int, Dict[str, str]]]
+    ):
         # Header: MAGIC, version, comp, created, sig_count, then per-signal metadata
-        f.write(struct.pack(HEADER_PREFIX_FMT, MAGIC, self.version, self.comp, self.created, len(signals_sorted)))
+        f.write(
+            struct.pack(
+                HEADER_PREFIX_FMT,
+                MAGIC,
+                self.version,
+                self.comp,
+                self.created,
+                len(signals_sorted),
+            )
+        )
         for sid, meta in signals_sorted:
+
             def _wstr(s: str):
                 b = s.encode("utf-8")
-                f.write(struct.pack("<H", len(b))); f.write(b)
-            f.write(struct.pack("<I", sid))
-            _wstr(meta.get("name",""))
-            _wstr(meta.get("unit",""))
-            _wstr(meta.get("description",""))
-            _wstr(meta.get("source",""))
+                f.write(struct.pack("<H", len(b)))
+                f.write(b)
 
-    def _build_final_from_tmp(self, tmp_entries: List[Tuple[int, int, float, float, int]], attempt = 0):
+            f.write(struct.pack("<I", sid))
+            _wstr(meta.get("name", ""))
+            _wstr(meta.get("unit", ""))
+            _wstr(meta.get("description", ""))
+            _wstr(meta.get("source", ""))
+
+    def _build_final_from_tmp(
+        self, tmp_entries: List[Tuple[int, int, float, float, int]], attempt=0
+    ):
         attempt += 1
         try:
             # open final tmp, then atomic rename
@@ -363,15 +411,20 @@ class AsyncPltWriter:
             os.replace(final_tmp, self.final_path)
         except:
             from time import sleep
+
             sleep(1)
-            self._build_final_from_tmp(tmp_entries,attempt)
+            self._build_final_from_tmp(tmp_entries, attempt)
+
     # ---- util ----
 
     def list_registered_signals(self) -> List[Tuple[int, str]]:
-        return [(sid, meta["name"]) for sid, meta in sorted(self._signals_by_id.items())]
+        return [
+            (sid, meta["name"]) for sid, meta in sorted(self._signals_by_id.items())
+        ]
 
 
 # -------------------------- READER --------------------------
+
 
 class PltReader:
     def __init__(self, path: str):
@@ -403,11 +456,21 @@ class PltReader:
         self.signals = {}
         for _ in range(sig_count):
             sid = struct.unpack("<I", f.read(4))[0]
+
             def _rstr():
                 ln = struct.unpack("<H", f.read(2))[0]
                 return f.read(ln).decode("utf-8")
-            name = _rstr(); unit = _rstr(); desc = _rstr(); src = _rstr()
-            self.signals[sid] = {"name": name, "unit": unit, "description": desc, "source": src}
+
+            name = _rstr()
+            unit = _rstr()
+            desc = _rstr()
+            src = _rstr()
+            self.signals[sid] = {
+                "name": name,
+                "unit": unit,
+                "description": desc,
+                "source": src,
+            }
 
     def _read_footer_and_index(self):
         f = self._f
@@ -436,7 +499,9 @@ class PltReader:
             f.seek(off, os.SEEK_SET)
             if f.read(4) != CHUNK_MAGIC:
                 raise ValueError("Chunk magic mismatch")
-            sid, n, raw_len, comp_len, mn, mx = struct.unpack(CHUNK_HDR_FMT, f.read(CHUNK_HDR_SIZE))
+            sid, n, raw_len, comp_len, mn, mx = struct.unpack(
+                CHUNK_HDR_FMT, f.read(CHUNK_HDR_SIZE)
+            )
             if sid != signal_id:
                 raise ValueError("Index points to wrong signal")
             comp_payload = f.read(comp_len)
@@ -446,12 +511,15 @@ class PltReader:
             ts_list, val_list = [], []
             view = memoryview(raw)
             for i in range(n):
-                rec = view[i*RECORD_SIZE:(i+1)*RECORD_SIZE]
+                rec = view[i * RECORD_SIZE : (i + 1) * RECORD_SIZE]
                 ts, val = struct.unpack(RECORD_FMT, rec)
-                ts_list.append(ts); val_list.append(val)
+                ts_list.append(ts)
+                val_list.append(val)
             yield ts_list, val_list
 
-    def iter_time_range(self, signal_id: int, t1: float, t2: float) -> Iterable[Tuple[List[float], List[float]]]:
+    def iter_time_range(
+        self, signal_id: int, t1: float, t2: float
+    ) -> Iterable[Tuple[List[float], List[float]]]:
         """Only read chunks intersecting [t1, t2], filter inside."""
         if signal_id not in self.index:
             return
@@ -462,7 +530,9 @@ class PltReader:
             f.seek(off, os.SEEK_SET)
             if f.read(4) != CHUNK_MAGIC:
                 raise ValueError("Chunk magic mismatch")
-            sid, n, raw_len, comp_len, _mn, _mx = struct.unpack(CHUNK_HDR_FMT, f.read(CHUNK_HDR_SIZE))
+            sid, n, raw_len, comp_len, _mn, _mx = struct.unpack(
+                CHUNK_HDR_FMT, f.read(CHUNK_HDR_SIZE)
+            )
             if sid != signal_id:
                 raise ValueError("Index points to wrong signal")
             comp_payload = f.read(comp_len)
@@ -470,15 +540,17 @@ class PltReader:
             view = memoryview(raw)
             ts_list, val_list = [], []
             for i in range(n):
-                rec = view[i*RECORD_SIZE:(i+1)*RECORD_SIZE]
+                rec = view[i * RECORD_SIZE : (i + 1) * RECORD_SIZE]
                 ts, val = struct.unpack(RECORD_FMT, rec)
                 if t1 <= ts <= t2:
-                    ts_list.append(ts); val_list.append(val)
+                    ts_list.append(ts)
+                    val_list.append(val)
             if ts_list:
                 yield ts_list, val_list
 
     def read_signal_all(self, signal_id: int) -> Tuple[List[float], List[float]]:
         ts_all, val_all = [], []
         for ts, vs in self.iter_chunks(signal_id):
-            ts_all.extend(ts); val_all.extend(vs)
+            ts_all.extend(ts)
+            val_all.extend(vs)
         return ts_all, val_all

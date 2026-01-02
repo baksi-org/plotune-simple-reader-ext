@@ -211,7 +211,8 @@ class ReaderManager:
 
     def __init__(self):
         self.readers: Dict[str, Reader] = {}
-        # key: assigned_signal_name -> { "orig": original_signal_name, "reader": Reader, "path": path }
+        # key: assigned_signal_name -> { "orig": original_signal_name,
+        # "reader": Reader, "path": path }
         self.signal_map: Dict[str, Dict] = {}
         # optional reverse map original -> assigned (useful)
         self.signal_map_invert: Dict[str, str] = {}
@@ -235,7 +236,8 @@ class ReaderManager:
         assigned_list = []
         for signal in signal_names:
             _signal = self.get_signal_name(signal)
-            # store richer mapping so we can locate reader & original name by assigned name
+            # store richer mapping so we can locate reader & original name by
+            # assigned name
             self.signal_map[_signal] = {
                 "orig": signal,
                 "reader": self.readers[path],

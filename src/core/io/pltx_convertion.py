@@ -202,7 +202,8 @@ class AsyncPltWriter:
             pass
         self._tmp_f.close()
 
-        # assemble final file (header + chunks + index + footer) via streaming copy
+        # assemble final file (header + chunks + index + footer) via streaming
+        # copy
         tmp_idx_entries = await asyncio.to_thread(self._scan_tmp_for_index_entries)
         await asyncio.to_thread(self._build_final_from_tmp, tmp_idx_entries)
 
@@ -342,7 +343,8 @@ class AsyncPltWriter:
     def _write_header_to_final(
         self, f, signals_sorted: List[Tuple[int, Dict[str, str]]]
     ):
-        # Header: MAGIC, version, comp, created, sig_count, then per-signal metadata
+        # Header: MAGIC, version, comp, created, sig_count, then per-signal
+        # metadata
         f.write(
             struct.pack(
                 HEADER_PREFIX_FMT,
@@ -380,7 +382,8 @@ class AsyncPltWriter:
                 sigs_sorted = sorted(self._signals_by_id.items(), key=lambda kv: kv[0])
                 self._write_header_to_final(out_f, sigs_sorted)
 
-                # copy chunks while building final index (offsets refer to out_f)
+                # copy chunks while building final index (offsets refer to
+                # out_f)
                 index_entries: List[Tuple[int, int, float, float]] = []
                 with open(self.tmp_path, "rb") as src:
                     for sid, total_size, mn, mx, _comp_len in tmp_entries:
@@ -409,7 +412,7 @@ class AsyncPltWriter:
 
             # atomic promote
             os.replace(final_tmp, self.final_path)
-        except:
+        except BaseException:
             from time import sleep
 
             sleep(1)

@@ -69,7 +69,8 @@ class SimpleReaderAgent:
     ) -> None:
 
         try:
-            # find reader + original signal name via signal_map (we no longer use last_path)
+            # find reader + original signal name via signal_map (we no longer
+            # use last_path)
             entry = reader_manager.signal_map.get(signal_name)
             if entry is None:
                 raise ValueError(

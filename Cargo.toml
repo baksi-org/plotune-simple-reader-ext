@@ -1,0 +1,43 @@
+[package]
+name = "plotune_simple_reader"
+version = "0.2.0"
+edition = "2021"
+
+[dependencies]
+flate2 = "1.0"
+lz4 = { version = "1.24", optional = true }
+zstd = { version = "0.13", optional = true }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+anyhow = "1.0"
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1.35", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"] }
+axum = { version = "0.8.8", features = ["ws"] }
+tracing = "0.1.44"
+tracing-subscriber = "0.3.22"
+uuid = "1.19.0"
+rand = { version = "0.8", features = ["std", "std_rng"] }
+tray-icon = "0.21.2"
+winit = "0.30.12"
+image = "0.25.9"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[features]
+default = ["zstd", "lz4"]
+async = []
+
+[lib]
+name = "pltx_reader"
+path = "src/lib.rs"
+
+[[example]]
+name = "read_pltx"
+path = "examples/read_pltx.rs"

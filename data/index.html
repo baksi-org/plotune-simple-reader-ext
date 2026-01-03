@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Plotune Tool Dashboard</title>
+    <meta charset="utf-8" />
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #0f0f0f; color: #eee; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        .container { width: 95%; max-width: 1000px; border: 1px solid #333; padding: 2rem; border-radius: 12px; background: #1a1a1a; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        h1 { color: #00ffa3; margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .header-info { display: flex; justify-content: space-between; color: #888; font-size: 0.9rem; margin-bottom: 20px; }
+
+        .status-box { display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px; background: #222; margin-bottom: 20px; width: fit-content; }
+        .dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; }
+        .online { background-color: #00ffa3; box-shadow: 0 0 10px #00ffa3; }
+        .offline { background-color: #ff4b2b; box-shadow: 0 0 10px #ff4b2b; }
+
+        .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; text-align: left; }
+        .card { background: #252525; padding: 15px; border-radius: 8px; border-left: 4px solid #00a3ff; }
+        .card h3 { margin: 0 0 5px 0; font-size: 0.8rem; color: #00a3ff; text-transform: uppercase; }
+        .card p { margin: 0; font-family: monospace; font-size: 1.1rem; }
+
+        .config-table { width: 100%; border-collapse: collapse; margin-top: 20px; text-align: left; }
+        .config-table th { color: #888; font-size: 0.8rem; padding: 10px; border-bottom: 1px solid #333; }
+        .config-table td { padding: 10px; border-bottom: 1px solid #222; font-family: monospace; }
+
+        .readers { margin-top: 20px; display: grid; gap: 10px; }
+        .reader { background: #1f1f1f; padding: 12px; border-radius: 8px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+        .reader .meta { display:flex; flex-direction:column; }
+        .reader .id { font-family: monospace; font-size: 0.9rem; color: #aaa; }
+        .reader .count { font-size: 0.9rem; color: #ccc; }
+        .reader button { background: #222; color: #eee; border: 1px solid #333; padding:6px 10px; border-radius:6px; cursor:pointer; }
+        .headers { margin-top:8px; padding:10px; background:#171717; border-radius:6px; display:none; }
+        .headers ul { margin:0; padding-left: 18px; }
+        .badge { background: #333; padding: 2px 8px; border-radius: 4px; font-size: 0.8rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-info">
+            <span id="ext-id">ID: loading...</span>
+            <span id="ext-ver">v0.0.0</span>
+        </div>
+
+        <h1 id="ext-name">Plotune Extension</h1>
+        <p id="ext-desc" style="color: #bbb; text-align: left;">Loading description...</p>
+
+        <div class="status-box">
+            <span id="status-dot" class="dot offline"></span>
+            <span id="status-text">Connecting...</span>
+        </div>
+
+        <div class="config-grid">
+            <div class="card">
+                <h3>Connection Target</h3>
+                <p id="conn-target">-</p>
+            </div>
+            <div class="card">
+                <h3>Target Port</h3>
+                <p id="conn-port">-</p>
+            </div>
+        </div>
+
+        <table class="config-table">
+            <thead>
+                <tr>
+                    <th>CONFIGURATION KEY</th>
+                    <th>VALUE</th>
+                </tr>
+            </thead>
+            <tbody id="config-body">
+            </tbody>
+        </table>
+
+        <div class="readers">
+            <h2 style="color:#00a3ff; margin:0;">Active Readers</h2>
+            <div id="readers-list">
+                <!-- readers injected here -->
+            </div>
+        </div>
+
+        <p style="margin-top: 20px;">
+            <a href="/info" target="_blank">Raw JSON API</a>
+        </p>
+    </div>
+
+    <script>
+        async function updateDashboard() {
+            try {
+                // Health
+                const healthRes = await fetch('/health');
+                const healthData = await healthRes.json();
+                const dot = document.getElementById('status-dot');
+                const stext = document.getElementById('status-text');
+
+                if (healthData.status === 'ok') {
+                    dot.className = 'dot online';
+                    stext.innerText = 'System Online';
+                } else {
+                    dot.className = 'dot offline';
+                    stext.innerText = 'Degraded';
+                }
+
+                // Info
+                const infoRes = await fetch('/info');
+                const config = await infoRes.json();
+
+                document.getElementById('ext-name').innerText = config.name;
+                document.getElementById('ext-id').innerText = `ID: ${config.id}`;
+                document.getElementById('ext-ver').innerText = `${config.version}`;
+                document.getElementById('ext-desc').innerText = config.description || '';
+                document.getElementById('conn-target').innerText = config.connection?.target || '-';
+                document.getElementById('conn-port').innerText = config.connection?.port || '-';
+
+                // Dynamic configuration
+                const tbody = document.getElementById('config-body');
+                tbody.innerHTML = '';
+                const cfg = config.configuration || {};
+                for (const [key, value] of Object.entries(cfg)) {
+                    const row = `<tr>
+                        <td>${key}</td>
+                        <td><span class="badge">${JSON.stringify(value)}</span></td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                }
+
+                // Readers
+                await updateReaders();
+
+            } catch (err) {
+                console.error('dashboard error', err);
+                document.getElementById('status-dot').className = 'dot offline';
+                document.getElementById('status-text').innerText = 'Connection Lost';
+            }
+        }
+
+        async function updateReaders() {
+            const listContainer = document.getElementById('readers-list');
+            listContainer.innerHTML = '<div style="color:#888">Loading readers...</div>';
+
+            try {
+                const res = await fetch('/readers');
+                if (!res.ok) {
+                    listContainer.innerHTML = '<div style="color:#ff9a9a">Failed to load readers</div>';
+                    return;
+                }
+                const readers = await res.json();
+
+                if (!Array.isArray(readers) || readers.length === 0) {
+                    listContainer.innerHTML = '<div style="color:#888">No active readers</div>';
+                    return;
+                }
+
+                listContainer.innerHTML = '';
+                readers.forEach(r => {
+                    const el = document.createElement('div');
+                    el.className = 'reader';
+                    el.innerHTML = `
+                        <div class="meta">
+                            <div class="id">${r.id}</div>
+                            <div class="count">${r.signals_count} signals</div>
+                        </div>
+                        <div style="display:flex;gap:10px;align-items:center">
+                            <button class="btn-headers" data-id="${r.id}">Toggle headers</button>
+                        </div>
+                    `;
+
+                    const headersBox = document.createElement('div');
+                    headersBox.className = 'headers';
+                    headersBox.innerHTML = `<div style="color:#ccc">Loading...</div>`;
+                    el.appendChild(headersBox);
+
+                    listContainer.appendChild(el);
+
+                    const btn = el.querySelector('.btn-headers');
+                    btn.addEventListener('click', async () => {
+                        if (headersBox.style.display === 'block') {
+                            headersBox.style.display = 'none';
+                            return;
+                        }
+                        headersBox.style.display = 'block';
+                        // fetch headers
+                        headersBox.innerHTML = '<div style="color:#888">Loading headers...</div>';
+                        try {
+                            const hres = await fetch(`/readers/${encodeURIComponent(r.id)}/headers`);
+                            if (!hres.ok) {
+                                headersBox.innerHTML = '<div style="color:#ff9a9a">Failed to load headers</div>';
+                                return;
+                            }
+                            const data = await hres.json();
+                            if (!data.headers || data.headers.length === 0) {
+                                headersBox.innerHTML = '<div style="color:#888">No headers</div>';
+                                return;
+                            }
+                            const ul = document.createElement('ul');
+                            data.headers.forEach(h => {
+                                const li = document.createElement('li');
+                                li.textContent = h;
+                                ul.appendChild(li);
+                            });
+                            headersBox.innerHTML = '';
+                            headersBox.appendChild(ul);
+                        } catch (e) {
+                            headersBox.innerHTML = '<div style="color:#ff9a9a">Error loading headers</div>';
+                        }
+                    });
+                });
+
+            } catch (err) {
+                console.error('readers fetch error', err);
+                listContainer.innerHTML = '<div style="color:#ff9a9a">Error loading readers</div>';
+            }
+        }
+
+        // initial load and interval updates
+        updateDashboard();
+        setInterval(updateDashboard, 5000);
+    </script>
+</body>
+</html>

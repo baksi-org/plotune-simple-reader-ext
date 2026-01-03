@@ -1,13 +1,12 @@
 {
   "name": "Plotune Simple Reader",
   "id": "plotune_simple_reader_ext",
-    "version": "v1.0.1",
+    "version": "v1.0.2",
   "description": "Reads table data from defined files.",
   "mode":"offline",
     "author": "Plotune SDK Team",
   "cmd": [
-    "python",
-    "main.py"
+    "plotune_simple_reader.exe"
   ],
   "enabled": true,
   "last_updated": "2025-06-15",
@@ -21,7 +20,7 @@
   "ask_form": false,
   "connection": {
     "ip": "127.0.0.1",
-    "port": 8105,
+    "port": 0,
     "target": "127.0.0.1",
     "target_port": 8000
   },
